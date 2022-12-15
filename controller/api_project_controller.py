@@ -26,6 +26,18 @@ def Generate():
     return jsonify(frases)
 
 
+@mod_api_project.route('/generate_answer', methods=['POST'])
+def Generate_answer():
+    data = request.data.decode('utf-8')
+    data = json.loads(data)
+    answer = data['answer']
+    context = data['context']
+    respuesta = generate_answer(answer, context)
+    print(respuesta)
+    return jsonify(respuesta)
+
+
+
 @mod_api_project.route('/uploads', methods=['POST'])
 def upload_file():
     if request.method == 'POST':
@@ -54,4 +66,11 @@ def register():
     data = json.loads(data)
     data = register_user(data)
     return jsonify(data)
+
+
+
+
+
+
+
 

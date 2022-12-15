@@ -18,6 +18,18 @@ import secrets
 from docx import Document
 import zipfile
 
+#Transformers
+from transformers import AutoTokenizer, AutoModelForSeq2SeqLM, AutoModelWithLMHead
+
+tokenizer = AutoTokenizer.from_pretrained("b2bFiles")
+model = AutoModelForSeq2SeqLM.from_pretrained("b2bFiles")
+
+# To save it once you download it
+#tokenizer = AutoTokenizer.from_pretrained("mrm8488/bert2bert-spanish-question-generation")
+#model = AutoModelWithLMHead.from_pretrained("mrm8488/bert2bert-spanish-question-generation")
+
+#tokenizer.save_pretrained("b2bFiles")
+#model.save_pretrained("b2bFiles")
 
 def prueba():
     # ...
@@ -119,3 +131,16 @@ def register_user(data):
     db.session.add(user)
     db.session.commit()
     return {"status": "200", "message": "Usuario registrado correctamente"}
+
+
+def generate_answer(answer, context, max_length=64):
+    print(answer, context)
+    input_text = "answer: %s  context: %s </s>" % (answer, context)
+    features = tokenizer([input_text], return_tensors='pt')
+
+    output = model.generate(input_ids=features['input_ids'],
+                                attention_mask=features['attention_mask'],
+                                max_length=max_length)
+
+    print (tokenizer.decode(output[0]))
+    return {'status':200}
