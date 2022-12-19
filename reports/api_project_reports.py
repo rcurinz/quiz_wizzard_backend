@@ -134,7 +134,6 @@ def register_user(data):
 
 
 def generate_answer(answer, context, max_length=64):
-    print(answer, context)
     input_text = "answer: %s  context: %s </s>" % (answer, context)
     features = tokenizer([input_text], return_tensors='pt')
 
@@ -142,5 +141,4 @@ def generate_answer(answer, context, max_length=64):
                                 attention_mask=features['attention_mask'],
                                 max_length=max_length)
 
-    print (tokenizer.decode(output[0]))
-    return {'status':200}
+    return {'status':200, 'message':tokenizer.decode(output[0])}
