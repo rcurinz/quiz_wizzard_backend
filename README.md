@@ -8,7 +8,7 @@ Python
 Flask
 *XAMPP
 ```
-*You must create a DB wich should be linked in config.py as :
+* You must create a DB wich should be linked in config.py as :
 ```py
 # DATABASE
 # MySQL
@@ -18,7 +18,7 @@ SQLALCHEMY_DATABASE_URI = 'mysql+pymysql://root:@localhost/<YOUR DB>?charset=utf
 Replacing <YOUR DB> for your DB name.
 
 ## RUN PROJECT
-For this proyects you will need the following librarys
+* For this proyects you will need the following librarys
 ```py
    pip install deep_translator
    pip install Flask
@@ -26,7 +26,7 @@ For this proyects you will need the following librarys
    pip install git+https://github.com/PrithivirajDamodaran/Parrot_Paraphraser.git *
 ```
 * We recommend you to follow the installation guide for Parrot provided in https://github.com/PrithivirajDamodaran/Parrot_Paraphraser#install
-*You also want to edit your security policies with
+* You also want to edit your security policies with
 ```py
   Set-ExecutionPolicy Unrestricted
 ```
