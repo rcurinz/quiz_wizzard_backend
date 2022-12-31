@@ -38,11 +38,11 @@ def Generate_answer():
 
 
 
-@mod_api_project.route('/uploads', methods=['POST'])
-def upload_file():
+@mod_api_project.route('/uploads/<id>/<id_project>', methods=['POST'])
+def upload_file(id, id_project):
     if request.method == 'POST':
         f = request.files['file']
-        respuesta = Upload_files(f)
+        respuesta = Upload_files(f, id, id_project)
         return jsonify(respuesta), 200
     else:
         return jsonify({"message": "Error al subir el archivo"}), 500
@@ -69,6 +69,39 @@ def register():
 
 
 
+#crear proyecto
+@mod_api_project.route('/createprojects', methods=['POST'])
+def create_Project():
+    data = request.data.decode('utf-8')
+    data = json.loads(data)
+    data = create_new_project(data)
+    return jsonify(data)
+
+#obtener proyectos
+@mod_api_project.route('/getprojects', methods=['POST'])
+def get_projects():
+    data = request.data.decode('utf-8')
+    data = json.loads(data)
+    data = get_projects_user(data)
+    return jsonify(data)
+
+
+#Obtener un proyecto
+@mod_api_project.route('/getproject', methods=['POST'])
+def get_project():
+    data = request.data.decode('utf-8')
+    data = json.loads(data)
+    data = get_project_user(data)
+    return jsonify(data)
+
+
+#Archivos del proyecto
+@mod_api_project.route('/getfiles', methods=['POST'])
+def get_files():
+    data = request.data.decode('utf-8')
+    data = json.loads(data)
+    data = get_files_project(data)
+    return jsonify(data)
 
 
 

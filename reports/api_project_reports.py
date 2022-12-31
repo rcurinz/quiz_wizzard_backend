@@ -60,15 +60,15 @@ def generate(texto1):
     return frases
 
 
-def Upload_files(files):
-    print(files)
+def Upload_files(files, id, id_project):
     filename = secure_filename(files.filename)
-    files.save(os.path.join(current_app.config['UPLOADS'], filename))
+    files.save(os.path.join(current_app.config['UPLOADS'], str(id)+"/"+str(id_project)+"/"+filename))
     extension = filename.split(".")[1]
+    text = ""
     if extension == 'pdf':
-        text = read_pdf(os.path.join(current_app.config['UPLOADS'], filename))
+        text = read_pdf(os.path.join(current_app.config['UPLOADS'], str(id)+"/"+str(id_project)+"/"+filename))
     elif extension == 'docx':
-        text = read_docs(os.path.join(current_app.config['UPLOADS'], filename))
+        text = read_docs(os.path.join(current_app.config['UPLOADS'], str(id)+"/"+str(id_project)+"/"+filename))
 
     return [{"message": "Archivo subido correctamente", "texto": str(text)}]
 
@@ -106,7 +106,7 @@ def login_user(email, password):
             to = Tokens(token=token, id_user=id, status_token='active', start_at=hora_start, finish_at=hora_finish)
             db.session.add(to)
             db.session.commit()
-            return {"status": "200", "message": "Usuario logeado correctamente", "token": token}
+            return {"status": "200", "message": "Usuario logeado correctamente", "token": token, "id": id}
         else:
             return {"status": "500", "message": "Contraseña incorrecta"}
     else:
@@ -142,3 +142,91 @@ def generate_answer(answer, context, max_length=64):
                                 max_length=max_length)
 
     return {'status':200, 'message':tokenizer.decode(output[0])}
+
+
+def create_new_project(data):
+    name = data['name']
+    description = data['description']
+    id_user = data['id_user']
+    project = Projects(
+        name=name,
+        description=description,
+        id_user=id_user,
+        dir = "", #"uploads/"+str(id_user)+"/"+name
+        status="active",
+        created_at=datetime.now(),
+        updated_at=None,
+        deleted_at=None
+
+    )
+    db.session.add(project)
+    db.session.commit()
+    #obtener el id del proyecto
+    id_project = project.id
+    #crear el directorio
+    dir = "uploads/"+str(id_user)+"/"+str(id_project)
+    os.makedirs(dir)
+    #actualizar el proyecto con el directorio
+    project.dir = dir
+    db.session.commit()
+    return {"status": "200", "message": "Proyecto creado correctamente", "id_project": id_project}
+
+
+def get_projects_user(data):
+    id_user = data['id_user']
+    id_project = data['id_project']
+    print(type(id_project), id_project)
+    data = []
+    #cuando el id del proyecto es -1 se devuelven todos los proyectos del usuario
+    if id_project == -1:
+        projects = Projects.query.filter_by(id_user=id_user).all()
+        print(projects)
+        for project in projects:
+            data.append({
+                "id": project.id,
+                "name": project.name,
+                "description": project.description,
+                "status": project.status,
+                "created_at": project.created_at,
+                "updated_at": project.updated_at,
+                "deleted_at": project.deleted_at
+            })
+    #En caso contrario se devuelve el proyecto con el id especificado
+    else:
+        project = Projects.query.filter_by(id=id_project).filter_by(id_user=id_user).first()
+        data.append({
+            "id": project.id,
+            "name": project.name,
+            "description": project.description,
+            "status": project.status,
+            "created_at": project.created_at,
+            "updated_at": project.updated_at,
+            "deleted_at": project.deleted_at
+        })
+    return {"status": "200", "message": "Proyectos obtenidos correctamente", "projects": data}
+
+
+def get_project_user(data):
+    id_project = data['id_project']
+    id_user = data['id_user']
+    project = Projects.query.filter_by(id=id_project).filter_by(id_user=id_user).first()
+    data = {
+        "id": project.id,
+        "name": project.name,
+        "description": project.description,
+        "status": project.status,
+        "created_at": project.created_at,
+        "updated_at": project.updated_at,
+        "deleted_at": project.deleted_at
+    }
+    return {"status": "200", "message": "Proyecto obtenido correctamente", "project": data}
+
+
+def get_files_project(data):
+    id_project = data['id_project']
+    id_user = data['id_user']
+    project = Projects.query.filter_by(id=id_project).filter_by(id_user=id_user).first()
+    dir = project.dir
+    files = os.listdir(dir)
+    print(files)
+    return {"status": "200", "message": "Archivos obtenidos correctamente", "files": files}
