@@ -77,6 +77,15 @@ def create_Project():
     data = create_new_project(data)
     return jsonify(data)
 
+#eliminar proyecto
+@mod_api_project.route('/deleteproject', methods=['POST'])
+def delete_Project():
+    data = request.data.decode('utf-8')
+    data = json.loads(data)
+    data = delete_project(data)
+    return jsonify(data)
+
+
 #obtener proyectos
 @mod_api_project.route('/getprojects', methods=['POST'])
 def get_projects():
@@ -104,6 +113,25 @@ def get_files():
     return jsonify(data)
 
 
+#texto del archivo
+@mod_api_project.route('/getfile', methods=['POST'])
+def get_file_text():
+    data = request.data.decode('utf-8')
+    data = json.loads(data)
+    data = get_file_text_project(data)
+    return jsonify(data)
 
 
-
+#descargar archivo
+@mod_api_project.route('/downloadfile/<id_project>/<id_file>/<id_user>', methods=['GET'])
+def download_file(id_project, id_file, id_user):
+    #data = request.data.decode('utf-8')
+    #data = json.loads(data)
+    data = download_file_project(id_project, id_file, id_user)
+    #x = send_file(app.root_path.replace("\\","/") +'/' + data[0] +'/' + data[1], mimetype='application/octet-stream', download_name=data[1], as_attachment=True, attachment_filename=data[1])
+    #x.headers["Access-Control-Allow-Origin"] = "*"
+    #print(app.config['UPLOADS'], data[0]+data[1])
+    #x = send_from_directory(data[0], data[1] , as_attachment=True)
+    #retornar el archivo en binario
+    print("aqui--------",data, type(data))
+    return data
