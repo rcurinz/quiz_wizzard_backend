@@ -142,15 +142,17 @@ def register_user(data):
     return {"status": "200", "message": "Usuario registrado correctamente"}
 
 
-def generate_answer(answer, context, max_length=64):
-    input_text = "answer: %s  context: %s </s>" % (answer, context)
+def generate_answer(answer, context, max_length=256):
+    input_text =  answer, context
     features = tokenizer([input_text], return_tensors='pt')
+
 
     output = model.generate(input_ids=features['input_ids'],
                                 attention_mask=features['attention_mask'],
                                 max_length=max_length)
-
-    return {'status':200, 'message':tokenizer.decode(output[0])}
+    text=tokenizer.decode(output[0]).strip("[SEP]")
+    text =text.strip("CLS]") 
+    return {'status':200, 'message':text}
 
 
 def create_new_project(data):
