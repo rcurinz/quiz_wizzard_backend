@@ -22,6 +22,8 @@ from docx import Document
 # Transformers
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM, AutoModelWithLMHead
 warnings.filterwarnings("ignore")
+from transformers import AutoModelForQuestionAnswering, AutoTokenizer, pipeline
+model_name = "MarcBrun/ixambert-finetuned-squad-eu-en"
 # import zipfile
 
 tokenizer = AutoTokenizer.from_pretrained("b2bFiles")
@@ -152,7 +154,9 @@ def generate_answer(answer, context, max_length=256):
                                 max_length=max_length)
     text=tokenizer.decode(output[0]).strip("[SEP]")
     text =text.strip("CLS]") 
-    return {'status':200, 'message':text}
+    qa = pipeline("question-answering", model=model_name, tokenizer=model_name)
+    pred = qa(question=question,context=context)
+    return {'status':200, 'message':text,'answer':pred['answer']}
 
 
 def create_new_project(data):
