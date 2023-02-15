@@ -149,15 +149,17 @@ def generate_answer(answer, context, max_length=256):
     features = tokenizer([input_text], return_tensors='pt')
 
 
-    output = model.generate(input_ids=features['input_ids'],
-                                attention_mask=features['attention_mask'],
-                                max_length=max_length)
+    output = model.generate(input_ids = features['input_ids'],
+                            attention_mask= features['attention_mask'],
+                            max_length= max_length)
     text=tokenizer.decode(output[0]).strip("[SEP]")
-    text =text.strip("CLS]") 
+    text = text.strip("CLS]")
     qa = pipeline("question-answering", model=model_name, tokenizer=model_name)
-    pred = qa(question=question,context=context)
-    return {'status':200, 'message':text,'answer':pred['answer']}
-
+    pred = qa(question=text, context=context)
+    return {'status': 200,
+            'message': text,
+            'answer': pred['answer']
+            }
 
 def create_new_project(data):
     name = data['name']
@@ -216,6 +218,7 @@ def get_projects_user(data):
             "updated_at": project.updated_at,
             "deleted_at": project.deleted_at
         })
+    print(data)
     return {"status": "200", "message": "Proyectos obtenidos correctamente", "projects": data}
 
 
@@ -256,6 +259,29 @@ def get_files_project(data):
         f.append({'id_proyecto': id_proyecto, 'id_file': id_file, 'name': name})
 
     return {"status": "200", "message": "Archivos obtenidos correctamente", "files": f}
+
+def get_meta_data_file_project(data):
+    id_project = data['id_project']
+    id_user = data['id_user']
+    id_file_ = data['id_file']
+    project = Projects.query.filter_by(id=id_project).filter_by(id_user=id_user).first()
+    dir = project.dir
+    for file in os.listdir(dir):
+        sep = file.split("-")
+        id_proyecto = sep[0]
+        id_file = sep[1]
+        #quitar los primeros dos eleeentos del array
+        sep.pop(0)
+        sep.pop(0)
+        #unir el array en un string
+        name = "-".join(sep)
+        if id_file == id_file_:
+            file = dir+"/"+file
+            with open(file, 'r') as f:
+                data = {'name': name, 'size': os.path.getsize(file), 'type': 'file'}
+            break
+    return {"status": "200", "message": "Metadatos obtenidos correctamente", "meta_data": data}
+
 
 
 def delete_project(data):
@@ -305,7 +331,7 @@ def get_file_text_project(data):
             elif extension == 'docx':
                 text = read_docs(dir +"/" +file)
             #retornar el arcxhivo
-            return {"status": "200", "message": "Archivo obtenido correctamente", "text": text, 'file':file}
+            return {"status": "200", "message": "Archivo obtenido correctamente", "text": text, 'file':file, 'name':name}
     return {"status": "200", "message": "Archivo no encontrado"}
 
 

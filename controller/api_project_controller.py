@@ -122,6 +122,13 @@ def get_file_text():
     return jsonify(data)
 
 
+@mod_api_project.route('/get-meta-data-file', methods=['POST'])
+def get_meta_data_file():
+    data = request.data.decode('utf-8')
+    data = json.loads(data)
+    data = get_meta_data_file_project(data)
+    return jsonify(data)
+
 #descargar archivo
 @mod_api_project.route('/downloadfile/<id_project>/<id_file>/<id_user>', methods=['GET'])
 def download_file(id_project, id_file, id_user):
@@ -133,5 +140,5 @@ def download_file(id_project, id_file, id_user):
     #print(app.config['UPLOADS'], data[0]+data[1])
     #x = send_from_directory(data[0], data[1] , as_attachment=True)
     #retornar el archivo en binario
-    print("aqui--------",data, type(data))
+    #print("aqui--------",data, type(data))
     return data
