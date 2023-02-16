@@ -23,6 +23,11 @@ Replacing <YOUR DB> for your DB name.
    pip install deep_translator
    pip install Flask
    pip install Flask-SQLAlchemy
+   pip install Hashids
+   pip install pymysql
+   pip instal FlaskCors
+   pip install PYPDF2
+   pip instapp python-docx
    pip install git+https://github.com/PrithivirajDamodaran/Parrot_Paraphraser.git *
 ```
 * We recommend you to follow the installation guide for Parrot provided in https://github.com/PrithivirajDamodaran/Parrot_Paraphraser#install
