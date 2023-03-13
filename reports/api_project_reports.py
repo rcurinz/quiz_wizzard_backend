@@ -23,8 +23,9 @@ from docx import Document
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM, AutoModelWithLMHead
 warnings.filterwarnings("ignore")
 from transformers import AutoModelForQuestionAnswering, AutoTokenizer, pipeline
-model_name = "MarcBrun/ixambert-finetuned-squad-eu-en"
-# import zipfile
+# To load the model and tokenizer
+modelQ = AutoModelForQuestionAnswering.from_pretrained("MarcBrun/ixambert-finetuned-squad-eu-en")
+tokenizer = AutoTokenizer.from_pretrained("MarcBrun/ixambert-finetuned-squad-eu-en")
 
 tokenizer = AutoTokenizer.from_pretrained("b2bFiles")
 model = AutoModelForSeq2SeqLM.from_pretrained("b2bFiles")
@@ -144,20 +145,20 @@ def register_user(data):
     return {"status": "200", "message": "Usuario registrado correctamente"}
 
 
-def generate_answer(answer, context, max_length=256):
-    input_text =  answer, context
-    features = tokenizer([input_text], return_tensors='pt')
-
-
+def generate_answer(context:str, max_length=256):
+    inputText = "context: %s </s>" % ( context)
+    features = tokenizer([inputText], return_tensors='pt')
     output = model.generate(input_ids = features['input_ids'],
                             attention_mask= features['attention_mask'],
                             max_length= max_length)
     text=tokenizer.decode(output[0]).strip("[SEP]")
-    text = text.strip("CLS]")
-    qa = pipeline("question-answering", model=model_name, tokenizer=model_name)
-    pred = qa(question=text, context=context)
+    question = text.strip("CLS]")
+
+    qa = pipeline("question-answering", model=modelQ, tokenizer=modelQ)
+    pred = qa(question=question,context=context)
     return {'status': 200,
             'message': text,
+            'question': question,
             'answer': pred['answer']
             }
 
