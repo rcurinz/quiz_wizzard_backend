@@ -20,6 +20,8 @@ Replacing <YOUR DB> for your DB name.
 ## RUN PROJECT
 * For this proyects you will need the following librarys
 ```py
+   pip install transformers
+   pip install tokenizer
    pip install deep_translator
    pip install Flask
    pip install Flask-SQLAlchemy
