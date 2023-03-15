@@ -25,10 +25,10 @@ Replacing <YOUR DB> for your DB name.
    pip install Flask-SQLAlchemy
    pip install Hashids
    pip install pymysql
-   pip install FlaskCors
+   pip install -U flask-cors
    pip install PYPDF2
    pip install python-docx
-   pip install git+https://github.com/PrithivirajDamodaran/Parrot_Paraphraser.git *
+   pip install git+https://github.com/PrithivirajDamodaran/Parrot_Paraphraser.git 
 ```
 * We recommend you to follow the installation guide for Parrot provided in https://github.com/PrithivirajDamodaran/Parrot_Paraphraser#install
 * You also want to edit your security policies with
