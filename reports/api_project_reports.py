@@ -24,11 +24,11 @@ from transformers import AutoTokenizer, AutoModelForSeq2SeqLM, AutoModelWithLMHe
 warnings.filterwarnings("ignore")
 from transformers import AutoModelForQuestionAnswering, AutoTokenizer, pipeline
 # To load the model and tokenizer
-modelQ = AutoModelForQuestionAnswering.from_pretrained("MarcBrun/ixambert-finetuned-squad-eu-en")
-tokenizer = AutoTokenizer.from_pretrained("MarcBrun/ixambert-finetuned-squad-eu-en")
+modelA = AutoModelForQuestionAnswering.from_pretrained("MarcBrun/ixambert-finetuned-squad-eu-en")
+tokenizerA = AutoTokenizer.from_pretrained("MarcBrun/ixambert-finetuned-squad-eu-en")
 
-tokenizer = AutoTokenizer.from_pretrained("b2bFiles")
-model = AutoModelForSeq2SeqLM.from_pretrained("b2bFiles")
+tokenizerQ = AutoTokenizer.from_pretrained("b2bFiles")
+modelQ = AutoModelForSeq2SeqLM.from_pretrained("b2bFiles")
 
 # To save it once you download it
 #tokenizer = AutoTokenizer.from_pretrained("mrm8488/bert2bert-spanish-question-generation")
@@ -155,20 +155,20 @@ def register_user(data):
     return {"status": "200", "message": "Usuario registrado correctamente"}
 
 
-def generate_answer(context:str,max_lenght=256):
-    inputText = "context: %s </s>" % ( context)
-    features = tokenizer([inputText], return_tensors='pt')
-    output = model.generate(input_ids = features['input_ids'],
-                            attention_mask= features['attention_mask'],
-                            max_lenght=max_lenght)
+def generate_answer(context:str, max_length:int=2048)->str:
+  inputText = "context: %s </s>" % ( context)
+  features = tokenizerQ([inputText], return_tensors='pt')
 
-    text=tokenizer.decode(output[0]).strip("[SEP]")
-    question = text.strip("CLS]")
+  output = modelQ.generate(input_ids=features['input_ids'], 
+               attention_mask=features['attention_mask'],
+               max_length=max_length)
 
-    qa = pipeline("question-answering", model=modelQ, tokenizer=modelQ)
-    pred = qa(question=question,context=context)
-    return {'status': 200,
-            'message': text,
+  question=tokenizerQ.decode(output[0]).strip("[SEP]")
+  question =question.strip("CLS]") 
+  qa = pipeline("question-answering", model=modelA, tokenizer=tokenizerA)
+  pred = qa(question=question,context=context)
+  return {'status': 200,
+            'message': 'ok',
             'question': question,
             'answer': pred['answer']
             }
@@ -423,10 +423,7 @@ def read_file_project(data):
 
 def createQuiz(data):
     texto = get_file_text_project(data, fun=True)
-    t = "El sol brillaba en el cielo y las hojas de los árboles se mecían suavemente con la brisa. El ambiente era tranquilo y apacible, como si el mundo hubiera entrado en un estado de calma perfecta. Los pájaros cantaban alegremente y la hierba era de un verde intenso y exuberante. En ese momento, todo parecía posible, todo parecía alcanzable. La mente podía divagar libremente y soñar con cualquier cosa que se deseara. Era un momento mágico, un momento de paz y felicidad que parecía durar eternamente. Y así fue, durante un tiempo que se sentía infinito. Pero como todo en la vida, llegó el momento de seguir adelante, de avanzar hacia nuevos horizontes y explorar todo lo que el mundo tenía por ofrecer. Y así, la mente se puso en marcha, preparada para lo que vendría a continuación."
-
-    text = "El Mundial de Fútbol de 1998, celebrado en Francia, fue uno de los eventos más importantes en la historia del deporte. La selección francesa, liderada por el legendario Zinedine Zidane, consiguió su primera Copa del Mundo tras vencer a Brasil en la final por 3-0.erra o la apasionada celebración de los jugadores franceses en el estadio Saint-Denis después de ganar el título."
-    r = generate_answer(text)
+    r = generate_answer(texto[0:250])
 
     #return {"status": "400", "message": "Error al crear el quiz"}
     return {"status": "200", "message": "Quiz creado correctamente", "quiz": r}
