@@ -142,3 +142,13 @@ def download_file(id_project, id_file, id_user):
     #retornar el archivo en binario
     #print("aqui--------",data, type(data))
     return data
+
+
+
+#leer archivo
+@mod_api_project.route('/createquiz', methods=['POST'])
+def createquiz():
+    data = request.data.decode('utf-8')
+    data = json.loads(data)
+    data = createQuiz(data)
+    return jsonify(data)

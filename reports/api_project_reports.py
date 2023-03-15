@@ -5,7 +5,7 @@ import os
 import shutil
 from io import BytesIO
 
-import PyPDF2
+from PyPDF2 import PdfReader
 import secrets
 from ast import literal_eval
 from datetime import datetime, timedelta
@@ -31,11 +31,11 @@ tokenizer = AutoTokenizer.from_pretrained("b2bFiles")
 model = AutoModelForSeq2SeqLM.from_pretrained("b2bFiles")
 
 # To save it once you download it
-# tokenizer = AutoTokenizer.from_pretrained("mrm8488/bert2bert-spanish-question-generation")
-# model = AutoModelWithLMHead.from_pretrained("mrm8488/bert2bert-spanish-question-generation")
+#tokenizer = AutoTokenizer.from_pretrained("mrm8488/bert2bert-spanish-question-generation")
+#model = AutoModelWithLMHead.from_pretrained("mrm8488/bert2bert-spanish-question-generation")
 
-# tokenizer.save_pretrained("b2bFiles")
-# model.save_pretrained("b2bFiles")
+#tokenizer.save_pretrained("b2bFiles")
+#model.save_pretrained("b2bFiles")
 
 
 def prueba():
@@ -57,7 +57,7 @@ def generate(texto1):
         print("-" * 100)
         print("Input_phrase: ", phrase)
         print("-" * 100)
-        para_phrases = parrot.augment(input_phrase=phrase, use_gpu=False)
+        para_phrases = parrot.augment(input_phrase=phrase, use_gpu=False, do_diverse = True)
         for para_phrase in para_phrases:
             p = GoogleTranslator(source='english', target='spanish').translate(para_phrase[0])
             if p not in frases_bruto:
@@ -85,14 +85,24 @@ def Upload_files(files, id, id_project):
 
 
 def read_pdf(file):
-    pdfFileObj = open(file, 'rb')
-    pdfReader = PyPDF2.PdfFileReader(pdfFileObj)
-    texto = [""]
-    for i in range(pdfReader.numPages):
+
+    reader = PdfReader(file)
+    number_of_pages = len(reader.pages)
+    text = ""
+    for k in range(number_of_pages):
+        page = reader.pages[k]
+        text += page.extract_text()
+
+
+    """pdfFileObj = open(file, 'rb')
+    pdfReader = PyPDF2.PdfReader(pdfFileObj)
+    
+    for i in range(pdfReader.pages):
         pageObj = pdfReader.getPage(i)
+        print(pageObj.extractText())
         texto[0] += pageObj.extractText() + "\n"
-    pdfFileObj.close()
-    return texto[0]
+    pdfFileObj.close()"""
+    return text
 
 
 def read_docs(file):
@@ -145,12 +155,13 @@ def register_user(data):
     return {"status": "200", "message": "Usuario registrado correctamente"}
 
 
-def generate_answer(context:str, max_length=256):
+def generate_answer(context:str,max_lenght=256):
     inputText = "context: %s </s>" % ( context)
     features = tokenizer([inputText], return_tensors='pt')
     output = model.generate(input_ids = features['input_ids'],
                             attention_mask= features['attention_mask'],
-                            max_length= max_length)
+                            max_lenght=max_lenght)
+
     text=tokenizer.decode(output[0]).strip("[SEP]")
     question = text.strip("CLS]")
 
@@ -161,6 +172,7 @@ def generate_answer(context:str, max_length=256):
             'question': question,
             'answer': pred['answer']
             }
+
 
 def create_new_project(data):
     name = data['name']
@@ -257,7 +269,7 @@ def get_files_project(data):
         sep.pop(0)
         #unir el array en un string
         name = "-".join(sep)
-        f.append({'id_proyecto': id_proyecto, 'id_file': id_file, 'name': name})
+        f.append({'id_proyecto': id_proyecto, 'id_file': id_file, 'name': name, 'extension': file.split(".")[-1]})
 
     return {"status": "200", "message": "Archivos obtenidos correctamente", "files": f}
 
@@ -305,7 +317,7 @@ def delete_project(data):
     return {"status": "200", "message": "Proyecto eliminado correctamente"}
 
 
-def get_file_text_project(data):
+def get_file_text_project(data, fun=False):
     id_project = data['id_project']
     id_user = data['id_user']
     id_file = data['id_file']
@@ -325,13 +337,15 @@ def get_file_text_project(data):
         #unir el array en un string
         name = "-".join(sep)
         if id_file == id_file_:
-            extension = file.split(".")[1]
+            extension = file.split(".")[-1]
             text = ""
             if extension == 'pdf':
                 text = read_pdf(dir +"/" +file)
             elif extension == 'docx':
                 text = read_docs(dir +"/" +file)
             #retornar el arcxhivo
+            if fun:
+                return text
             return {"status": "200", "message": "Archivo obtenido correctamente", "text": text, 'file':file, 'name':name}
     return {"status": "200", "message": "Archivo no encontrado"}
 
@@ -378,3 +392,41 @@ def descargar_archivo(dir, nombre_archivo):
         BytesIO(contenido),
         mimetype='application/octet-stream'
     )
+
+
+
+def read_file_project(data):
+    id_project = data['id_project']
+    id_user = data['id_user']
+    id_file = data['id_file']
+    project = Projects.query.filter_by(id=id_project).filter_by(id_user=id_user).first()
+    dir = project.dir
+    f = []
+    if not os.path.exists(dir):
+        os.makedirs(dir)
+    files = os.listdir(dir)
+    for file in files:
+        sep = file.split("-")
+        id_proyecto = sep[0]
+        id_file_ = sep[1]
+        #quitar los primeros dos eleeentos del array
+        sep.pop(0)
+        sep.pop(0)
+        #unir el array en un string
+        name = "-".join(sep)
+        if id_file == id_file_:
+            #retornar el arcxhivo para descargar
+            return send_from_directory(dir, file, as_attachment=False)
+    return {"status": "200", "message": "Archivo no encontrado"}
+
+
+
+def createQuiz(data):
+    texto = get_file_text_project(data, fun=True)
+    t = "El sol brillaba en el cielo y las hojas de los árboles se mecían suavemente con la brisa. El ambiente era tranquilo y apacible, como si el mundo hubiera entrado en un estado de calma perfecta. Los pájaros cantaban alegremente y la hierba era de un verde intenso y exuberante. En ese momento, todo parecía posible, todo parecía alcanzable. La mente podía divagar libremente y soñar con cualquier cosa que se deseara. Era un momento mágico, un momento de paz y felicidad que parecía durar eternamente. Y así fue, durante un tiempo que se sentía infinito. Pero como todo en la vida, llegó el momento de seguir adelante, de avanzar hacia nuevos horizontes y explorar todo lo que el mundo tenía por ofrecer. Y así, la mente se puso en marcha, preparada para lo que vendría a continuación."
+
+    text = "El Mundial de Fútbol de 1998, celebrado en Francia, fue uno de los eventos más importantes en la historia del deporte. La selección francesa, liderada por el legendario Zinedine Zidane, consiguió su primera Copa del Mundo tras vencer a Brasil en la final por 3-0.erra o la apasionada celebración de los jugadores franceses en el estadio Saint-Denis después de ganar el título."
+    r = generate_answer(text)
+
+    #return {"status": "400", "message": "Error al crear el quiz"}
+    return {"status": "200", "message": "Quiz creado correctamente", "quiz": r}
