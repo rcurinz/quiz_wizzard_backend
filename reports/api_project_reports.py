@@ -89,11 +89,12 @@ def read_pdf(file):
     reader = PdfReader(file)
     number_of_pages = len(reader.pages)
     text = ""
+    paragraphs=[]
     for k in range(number_of_pages):
         page = reader.pages[k]
-        text += page.extract_text()
+        #text += page.extract_text()
 
-
+        paragraphs.append(page.extract_text().strip('\n'))
     """pdfFileObj = open(file, 'rb')
     pdfReader = PyPDF2.PdfReader(pdfFileObj)
     
@@ -102,7 +103,7 @@ def read_pdf(file):
         print(pageObj.extractText())
         texto[0] += pageObj.extractText() + "\n"
     pdfFileObj.close()"""
-    return text
+    return paragraphs
 
 
 def read_docs(file):
@@ -349,6 +350,15 @@ def get_file_text_project(data, fun=False):
             return {"status": "200", "message": "Archivo obtenido correctamente", "text": text, 'file':file, 'name':name}
     return {"status": "200", "message": "Archivo no encontrado"}
 
+def quiz_batch(paragraphs:list)->list:
+  questions=[]
+  answers=[]
+  for par in paragraphs:
+    result = generate_answer(par[0:512])
+    questions.append(result['question'])
+    answers.append(result['answer'])
+  return questions,answers
+
 
 def download_file_project(id_project, id_file, id_user):
     #id_project = data['id_project']
@@ -423,7 +433,8 @@ def read_file_project(data):
 
 def createQuiz(data):
     texto = get_file_text_project(data, fun=True)
-    r = generate_answer(texto[0:250])
+    q,a = quiz_batch(texto) 
+    #r = generate_answer(texto[0:250])
 
     #return {"status": "400", "message": "Error al crear el quiz"}
-    return {"status": "200", "message": "Quiz creado correctamente", "quiz": r}
+    return {"status": "200", "message": "Quiz creado correctamente", "quiz questions": q,"quiz answers": a}
