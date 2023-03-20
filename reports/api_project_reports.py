@@ -23,6 +23,7 @@ from docx import Document
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM, AutoModelWithLMHead
 warnings.filterwarnings("ignore")
 from transformers import AutoModelForQuestionAnswering, AutoTokenizer, pipeline
+from docx2pdf import convert
 # To load the model and tokenizer
 modelA = AutoModelForQuestionAnswering.from_pretrained("MarcBrun/ixambert-finetuned-squad-eu-en")
 tokenizerA = AutoTokenizer.from_pretrained("MarcBrun/ixambert-finetuned-squad-eu-en")
@@ -359,6 +360,29 @@ def quiz_batch(paragraphs:list)->list:
     answers.append(result['answer'])
   return questions,answers
 
+def document_to_quiz(q:list,a:list):
+    document = Document()
+
+    document.add_heading('Exámen Generado', 0)
+
+    p = document.add_paragraph('Tu examen generado es el siguiente:').bold = True
+    document.add_paragraph('Tus preguntas son', style='List Bullet')
+    table = document.add_table(rows=1, cols=3)
+    hdr_cells = table.rows[0].cells
+    hdr_cells[0].text = 'Pregunta'
+    hdr_cells[1].text = 'Respuesta'
+
+    for i in range(len(q)):
+        row_cells = table.add_row().cells
+        row_cells[0].text = str(q[i])
+        row_cells[1].text = str(a[i])
+
+    document.add_page_break()
+
+    document.save('demo.docx')
+    convert('demo.docx','doc.pdf')
+
+   
 
 def download_file_project(id_project, id_file, id_user):
     #id_project = data['id_project']
@@ -433,7 +457,8 @@ def read_file_project(data):
 
 def createQuiz(data):
     texto = get_file_text_project(data, fun=True)
-    q,a = quiz_batch(texto) 
+    q,a = quiz_batch(texto)
+    #document_to_quiz(q,a) 
     #r = generate_answer(texto[0:250])
 
     #return {"status": "400", "message": "Error al crear el quiz"}
