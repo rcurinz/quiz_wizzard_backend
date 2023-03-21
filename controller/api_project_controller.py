@@ -143,6 +143,15 @@ def download_file(id_project, id_file, id_user):
     #print("aqui--------",data, type(data))
     return data
 
+@mod_api_project.route('/downloadfiletemp', methods=['POST'])
+def download_file_temp():
+    data = request.data.decode('utf-8')
+    data = json.loads(data)
+    id_file = data['id_file']
+    id_user = data['id_user']
+    data = download_file_project_tmp( id_file, id_user)
+    return data
+
 
 
 #leer archivo

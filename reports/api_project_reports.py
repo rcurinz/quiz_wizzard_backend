@@ -19,6 +19,7 @@ import warnings
 from werkzeug.utils import secure_filename
 from deep_translator import GoogleTranslator
 from docx import Document
+from fpdf import FPDF
 # Transformers
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM, AutoModelWithLMHead
 warnings.filterwarnings("ignore")
@@ -34,11 +35,11 @@ tokenizerQ = AutoTokenizer.from_pretrained("b2bFiles")
 modelQ = AutoModelForSeq2SeqLM.from_pretrained("b2bFiles")
 
 # To save it once you download it
-#tokenizer = AutoTokenizer.from_pretrained("mrm8488/bert2bert-spanish-question-generation")
-#model = AutoModelWithLMHead.from_pretrained("mrm8488/bert2bert-spanish-question-generation")
+#tokenizerQ = AutoTokenizer.from_pretrained("mrm8488/bert2bert-spanish-question-generation")
+#modelQ = AutoModelWithLMHead.from_pretrained("mrm8488/bert2bert-spanish-question-generation")
 
-#tokenizer.save_pretrained("b2bFiles")
-#model.save_pretrained("b2bFiles")
+#tokenizerQ.save_pretrained("b2bFiles")
+#modelQ.save_pretrained("b2bFiles")
 
 
 def prueba():
@@ -362,7 +363,7 @@ def quiz_batch(paragraphs:list)->list:
     answers.append(result['answer'])
   return questions,answers
 
-def document_to_quiz(q:list,a:list):
+def document_to_quiz(q: list, a: list) -> object:
     document = Document()
 
     document.add_heading('Exámen Generado', 0)
@@ -386,9 +387,10 @@ def document_to_quiz(q:list,a:list):
     out_doc=f'temp/demo{nhash}.pdf'
 
     document.save(in_doc)
-    doc=aw.Document(in_doc)
+    doc = aw.Document(in_doc)
     doc.save(out_doc)
-    #convert(in_doc,out_doc,pythoncom.CoInitialize())
+    return out_doc
+
 
    
 
@@ -416,6 +418,13 @@ def download_file_project(id_project, id_file, id_user):
             return send_from_directory(dir, file, as_attachment=True)
     return {"status": "200", "message": "Archivo no encontrado"}
 
+
+def download_file_project_tmp(name, id_user):
+    f = name.split("/")
+    namef = f[1]
+    dir = f[0]
+
+    return send_from_directory(dir, namef, as_attachment=True)
 
 def descargar_archivo(dir, nombre_archivo):
     # Obtener la ruta completa del archivo
@@ -462,10 +471,53 @@ def read_file_project(data):
     return {"status": "200", "message": "Archivo no encontrado"}
 
 
+def createPDF():
+    pdf = FPDF()
+
+    # Añadimos una página al PDF
+    pdf.add_page()
+
+    # Definimos la fuente y el tamaño para el título
+    pdf.set_font("Arial", size=24, style="B")
+    pdf.cell(0, 20, txt="Examen generado", ln=1, align="C")
+
+    # Definimos la fuente y el tamaño para las preguntas y respuestas
+    pdf.set_font("Arial", size=16)
+    pdf.set_text_color(0, 0, 255)
+
+    # Definimos el color de fondo para las preguntas y respuestas
+    pdf.set_fill_color(220, 220, 220)
+
+    # Creamos una lista de preguntas y respuestas
+    preguntas_respuestas = [
+        {
+            "pregunta": "¿Cuál es la capital de Francia?",
+            "respuesta": "París"
+        },
+        {
+            "pregunta": "¿En qué año se fundó Apple?",
+            "respuesta": "1976"
+        },
+        {
+            "pregunta": "¿Cuál es el río más largo del mundo?",
+            "respuesta": "El río Amazonas"
+        }
+    ]
+
+    # Recorremos la lista de preguntas y respuestas y las escribimos en el PDF
+    for i, pregunta_respuesta in enumerate(preguntas_respuestas):
+        pregunta = pregunta_respuesta["pregunta"]
+        respuesta = pregunta_respuesta["respuesta"]
+        pdf.cell(0, 10, txt=f"{i + 1}. {pregunta}\n", fill=True)
+        pdf.cell(0, 10, txt=f"Respuesta: {respuesta}", ln=1)
+    # Guardamos el PDF
+    pdf.output("temp/examen.pdf")
+
 
 def createQuiz(data):
     texto = get_file_text_project(data, fun=True)
     q,a = quiz_batch(texto)
-    document_to_quiz(q,a) 
+    name = document_to_quiz(q,a)
+    createPDF()
     #return {"status": "400", "message": "Error al crear el quiz"}
-    return {"status": "200", "message": "Quiz creado correctamente", "quiz questions": q,"quiz answers": a}
+    return {"status": "200", "message": "Quiz creado correctamente","name": name ,"quiz questions": q,"quiz answers": a}
