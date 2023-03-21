@@ -25,6 +25,7 @@ warnings.filterwarnings("ignore")
 from transformers import AutoModelForQuestionAnswering, AutoTokenizer, pipeline
 from docx2pdf import convert
 import pythoncom
+import aspose.words as aw
 # To load the model and tokenizer
 modelA = AutoModelForQuestionAnswering.from_pretrained("MarcBrun/ixambert-finetuned-squad-eu-en")
 tokenizerA = AutoTokenizer.from_pretrained("MarcBrun/ixambert-finetuned-squad-eu-en")
@@ -385,7 +386,9 @@ def document_to_quiz(q:list,a:list):
     out_doc=f'temp/demo{nhash}.pdf'
 
     document.save(in_doc)
-    convert(in_doc,out_doc,pythoncom.CoInitialize())
+    doc=aw.Document(in_doc)
+    doc.save(out_doc)
+    #convert(in_doc,out_doc,pythoncom.CoInitialize())
 
    
 
