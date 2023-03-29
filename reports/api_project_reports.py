@@ -2,6 +2,7 @@
 # pip install pandas
 
 import os
+import math
 import shutil
 from io import BytesIO
 import time
@@ -363,6 +364,43 @@ def quiz_batch(paragraphs:list)->list:
     answers.append(result['answer'])
   return questions,answers
 
+
+def quiz_batchSec(par:list,cross:bool,sections:int)->list:
+    if(sections>216):
+      raise  ValueError("Sections mus not exceed 216 words")
+    questions=[]
+    answers=[]
+    start_id=0
+    end_id=sections
+    words=par.split()
+    scale=math.trunc(len(words)/sections)
+    if(cross):
+      for i in range(scale):
+        section_selected=' '.join(str(words[e])for e in range(start_id,end_id))
+        result = generate_answer(str(section_selected),sections)
+        questions.append(result['question'])
+        answers.append(result['answer'])
+        if(i<scale):
+          start_id=end_id-int((end_id/2))
+          end_id=sections*(i+2)-int(end_id/2)
+        if(i==scale):
+          start_id=end_id
+          end_id=len(words)-(scale*i)
+    if(not cross):
+      for i in range(scale):
+        section_selected=' '.join(str(words[e])for e in range(start_id,end_id))
+        result = generate_answer(str(section_selected),sections)
+        questions.append(result['question'])
+        answers.append(result['answer'])
+        if(i<scale):
+          start_id=end_id
+          end_id=sections*(i+2)
+        if(i==scale):
+          start_id=end_id
+          end_id=len(words)-(scale*i)
+
+    return questions,answers
+
 def document_to_quiz(q: list, a: list) -> object:
     document = Document()
 
@@ -516,7 +554,8 @@ def createPDF():
 
 def createQuiz(data):
     texto = get_file_text_project(data, fun=True)
-    q,a = quiz_batch(texto)
+    #q,a = quiz_batch(texto)
+    q,a = quiz_batchSec(texto[0],False,128)
     name = document_to_quiz(q,a)
     createPDF()
     #return {"status": "400", "message": "Error al crear el quiz"}
