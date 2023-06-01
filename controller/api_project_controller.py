@@ -42,7 +42,7 @@ def Generate_answer():
 def upload_file(id, id_project):
     if request.method == 'POST':
         f = request.files['file']
-        respuesta = Upload_files(f, id, id_project)
+        respuesta = upload_files(f, id, id_project)
         return jsonify(respuesta), 200
     else:
         return jsonify({"message": "Error al subir el archivo"}), 500
@@ -74,6 +74,7 @@ def register():
 def create_Project():
     data = request.data.decode('utf-8')
     data = json.loads(data)
+    print(data)
     data = create_new_project(data)
     return jsonify(data)
 
@@ -157,7 +158,27 @@ def download_file_temp():
 #leer archivo
 @mod_api_project.route('/createquiz', methods=['POST'])
 def createquiz():
+    data = request.get_json()
+    id_proyecto = data['id_project']
+    id_file = data['id_file']
+    id = data['id_user']
+    data = createQuiz(data, id, id_file, id_proyecto)
+    return jsonify(data)
+
+
+#Generar pdf
+@mod_api_project.route('/generatepdf', methods=['POST'])
+def generatepdf():
     data = request.data.decode('utf-8')
     data = json.loads(data)
-    data = createQuiz(data)
+    file = generate_pdf(data)
+    borrar_archivos("temp")
+    return file
+
+
+#get cuesitonarios generados
+@mod_api_project.route('/getquizgenerated', methods=['POST'])
+def getallquiz():
+    data = request.get_json()
+    data = get_all_quiz(data)
     return jsonify(data)

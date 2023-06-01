@@ -2,7 +2,7 @@ from . import db
 from .bases import Model, BaseConstant
 
 class Tokens(Model):
-    __tablename__ = 'tokens'
+    __tablename__ = 'tokenss'
     # COLUMNS
     id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
     token = db.Column(db.String(255))

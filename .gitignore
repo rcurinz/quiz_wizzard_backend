@@ -1,2 +1,7 @@
 uploads
 b2bFiles
+.idea/dataSources.xml
+
+*.pyc
+
+temp/

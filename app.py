@@ -1,4 +1,5 @@
 from flask import Flask, jsonify
+from flask_migrate import Migrate
 import os
 from models import db
 
@@ -6,11 +7,13 @@ from models import db
 app = Flask(__name__)
 app.config.from_object('config')
 
-db.app = app
-db.init_app(app)
+db.init_app(app) # Inicializa SQLAlchemy
+migrate = Migrate(app, db)  # Crea la instancia de Migrate
+
 # Crear base de datos
 with app.app_context():
 	db.create_all()
+
 
 basedir = os.path.abspath(os.path.dirname(__file__))
 
