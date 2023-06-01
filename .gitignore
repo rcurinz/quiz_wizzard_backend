@@ -5,3 +5,7 @@ b2bFiles
 *.pyc
 
 temp/
+
+.idea/
+
+__pycache__/
