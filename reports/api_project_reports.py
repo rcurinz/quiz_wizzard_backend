@@ -7,6 +7,7 @@ import shutil
 import uuid
 from io import BytesIO
 import time
+import pandas as pd
 from PyPDF2 import PdfReader
 import secrets
 from ast import literal_eval
@@ -164,7 +165,7 @@ def register_user(data):
     return {"status": "200", "message": "Usuario registrado correctamente"}
 
 
-def generate_answer(context: str, max_length: int = 2048) -> str:
+def generate_answer(context: str, max_length: int = 512) -> str:
     inputText = "context: %s </s>" % (context)
     features = tokenizerQ([inputText], return_tensors='pt')
 
@@ -179,7 +180,8 @@ def generate_answer(context: str, max_length: int = 2048) -> str:
     return {'status': 200,
             'message': 'ok',
             'question': question,
-            'answer': pred['answer']
+            'answer': pred['answer'],
+            'score' : pred['score']
             }
 
 
@@ -349,51 +351,42 @@ def get_file_text_project(data, fun=False):
     return {"status": "200", "message": "Archivo no encontrado"}
 
 
-def quiz_batch(paragraphs: list) -> list:
-    questions = []
-    answers = []
-    for par in paragraphs:
-        result = generate_answer(par[0:512])
+
+
+def quiz_batchSec(par:list,cross:False,sections:64):
+    questions=[]
+    answers=[]
+    predScore=[]
+    start_id=0
+    end_id=sections
+    words=par.split()
+    scale=math.trunc(len(words)/sections)
+    if(cross):
+       for i in range(scale):
+        section_selected=' '.join(words[start_id:end_id])
+        result = generate_answer(str(section_selected))
         questions.append(result['question'])
         answers.append(result['answer'])
-    return questions, answers
-
-
-def quiz_batchSec(par: list, cross: bool, sections: int) -> list:
-    if (sections > 216):
-        raise ValueError("Sections mus not exceed 216 words")
-    questions = []
-    answers = []
-    start_id = 0
-    end_id = sections
-    words = par.split()
-    scale = math.trunc(len(words) / sections)
-    if (cross):
-        for i in range(scale):
-            section_selected = ' '.join(str(words[e]) for e in range(start_id, end_id))
-            result = generate_answer(str(section_selected), sections)
-            questions.append(result['question'])
-            answers.append(result['answer'])
-            if (i < scale):
-                start_id = end_id - int((end_id / 2))
-                end_id = sections * (i + 2) - int(end_id / 2)
-            if (i == scale):
-                start_id = end_id
-                end_id = len(words) - (scale * i)
-    if (not cross):
-        for i in range(scale):
-            section_selected = ' '.join(str(words[e]) for e in range(start_id, end_id))
-            result = generate_answer(str(section_selected), sections)
-            questions.append(result['question'])
-            answers.append(result['answer'])
-            if (i < scale):
-                start_id = end_id
-                end_id = sections * (i + 2)
-            if (i == scale):
-                start_id = end_id
-                end_id = len(words) - (scale * i)
-
-    return questions, answers
+        predScore.append(result['score'])
+        if(i<scale):
+          start_id=start_id+int(sections/2)
+          end_id=start_id+sections
+        if(i==scale):
+          start_id=start_id+sections
+          end_id=len(words)-(scale*i)
+    if(not cross):
+      for i in range(scale):
+        section_selected=' '.join(words[start_id:end_id])
+        result = generate_answer(str(section_selected))
+        questions.append(result['question'])
+        answers.append(result['answer'])
+        predScore.append(result['score'])
+        start_id=end_id
+        if(i<scale):
+          end_id=start_id+sections
+        if(i==scale):
+          end_id=len(words)-1
+    return questions, answers, predScore
 
 
 def document_to_quiz(q: list, a: list) -> object:
@@ -553,18 +546,27 @@ def createPDF():
     # Guardamos el PDF
     # gneerar un hash para el nombre del archivo
 
-
+def topQuestions(question:list, answer:list, score:list, top:int):
+    df = pd.DataFrame(columns=['question', 'answer', 'score'])
+    for i in range(len(question)):
+        newData={'question':question[i], 'answer':answer[i], 'score':score[i]}
+        df = df.append(newData, ignore_index=True)
+    df = df.sort_values(by=['score'], ascending=False)
+    df = df.head(top)
+    questions=df['question'].tolist()
+    aswers=df['answer'].tolist()
+    return questions, aswers
 def createQuiz(data, id, id_file, id_proyecto):
     texto = get_file_text_project(data, fun=True)
-    # q,a = quiz_batch(texto)
     texto_unido = ' '.join([' '.join(pagina) for pagina in texto])
-    q, a = quiz_batchSec(texto_unido, False, 128)
-    name, dir = document_to_quiz(q, a)
-    saveFileInDb(id_proyecto, [q, a])
+    q, a, score = quiz_batchSec(texto_unido, False, 128)
+    topQ,topA=topQuestions(q, a, score, 10)
+    name, dir = document_to_quiz(topQ, topA)
+    saveFileInDb(id_proyecto, [topQ, topA])
     # createPDF()
     # return {"status": "400", "message": "Error al crear el quiz"}
-    return {"status": "200", "message": "Quiz creado correctamente", "quiz questions": q,
-            "quiz answers": a}
+    return {"status": "200", "message": "Quiz creado correctamente", "quiz questions": topQ,
+            "quiz answers": topA}
 
 
 def saveFileInDb(id_proyecto, data):
