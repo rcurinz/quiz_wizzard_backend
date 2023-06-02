@@ -9,6 +9,7 @@ from io import BytesIO
 import time
 import pandas as pd
 from PyPDF2 import PdfReader
+import fitz
 import secrets
 from ast import literal_eval
 from datetime import datetime, timedelta
@@ -115,7 +116,7 @@ def read_pdf(file):
         page = reader.pages[k]
         # text += page.extract_text()
 
-        paragraphs.append(page.extract_text().strip('\n'))
+        paragraphs.append(page.extract_text(encoding='UTF-8').strip('\n'))
     return paragraphs
 
 
