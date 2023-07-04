@@ -39,5 +39,5 @@ def internal_server_error(error):
     return jsonify({"Error": ["AttributeError: "+error]}), 500
 
 
-if __name__ == '__main__':
-    app.run()
+#if __name__ == '__main__':
+#    app.run()

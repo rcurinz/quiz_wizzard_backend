@@ -3,6 +3,7 @@
 import json
 import os
 import math
+import random
 import shutil
 import uuid
 from io import BytesIO
@@ -26,12 +27,17 @@ from docx import Document
 from fpdf import FPDF
 # Transformers
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM, AutoModelWithLMHead
+import torch
 
 warnings.filterwarnings("ignore")
 from transformers import AutoModelForQuestionAnswering, AutoTokenizer, pipeline
 from docx2pdf import convert
-import pythoncom
 import aspose.words as aw
+
+from reportlab.lib.pagesizes import letter
+from reportlab.platypus import SimpleDocTemplate, Flowable
+from reportlab.lib import colors
+from reportlab.pdfgen import canvas
 
 # To load the model and tokenizer
 modelA = AutoModelForQuestionAnswering.from_pretrained("MarcBrun/ixambert-finetuned-squad-eu-en")
@@ -40,7 +46,6 @@ tokenizerA = AutoTokenizer.from_pretrained("MarcBrun/ixambert-finetuned-squad-eu
 tokenizerQ = AutoTokenizer.from_pretrained("b2bFiles")
 modelQ = AutoModelForSeq2SeqLM.from_pretrained("b2bFiles")
 
-
 # To save it once you download it
 # tokenizerQ = AutoTokenizer.from_pretrained("mrm8488/bert2bert-spanish-question-generation")
 # modelQ = AutoModelWithLMHead.from_pretrained("mrm8488/bert2bert-spanish-question-generation")
@@ -48,14 +53,17 @@ modelQ = AutoModelForSeq2SeqLM.from_pretrained("b2bFiles")
 # tokenizerQ.save_pretrained("b2bFiles")
 # modelQ.save_pretrained("b2bFiles")
 
+# Cargar pipeline una vez al inicio
+qa_pipeline = pipeline("question-answering", model=modelA, tokenizer=tokenizerA)
 
+modelA = modelA#.half().to('cuda')
+modelQ = modelQ#.half().to('cuda')
 def prueba():
-    # ...
     return {"test ": "prueba"}
 
 
 def generate(texto1):
-    texto = literal_eval(texto1)['question']
+    texto = texto1#literal_eval(texto1)['question']
     parrot = Parrot(model_tag="prithivida/parrot_paraphraser_on_T5")
 
     phrases = []
@@ -79,44 +87,70 @@ def generate(texto1):
 
 
 def upload_files(files, id, id_project):
+    # Obtener el usuario y proyecto de la base de datos
     user = Usuario.query.get(id)
     project = Proyecto.query.get(id_project)
 
+    # Verificar si el usuario y proyecto existen
     if user is None or project is None:
         return [{"message": "Usuario o proyecto no encontrado"}]
 
-    if project.usuario != user:
+    # Verificar si el proyecto pertenece al usuario
+    if project.user_id != user.user_id:
         return [{"message": "El proyecto no pertenece al usuario"}]
 
+    # Obtener un nombre de archivo seguro y generar un nombre único
     filename = secure_filename(files.filename)
-    new_filename = f"{id}_{id_project}_{filename}"
+    timestamp = datetime.utcnow().strftime('%Y%m%d%H%M%S')
+    new_filename = f"{id}_{id_project}_{timestamp}_{filename}"
 
-    files.save(os.path.join(current_app.config['UPLOADS'], new_filename))
+    # Intentar guardar el archivo
+    try:
+        files.save(os.path.join(current_app.config['UPLOADS'], new_filename))
 
-    new_file_record = Archivo(
-        project_id=id_project,
-        filename=new_filename,
-        original_filename=filename,
-        created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow()
-    )
+        # Crear un nuevo registro de archivo en la base de datos
+        new_file_record = Archivo(
+            project_id=id_project,
+            filename=new_filename,
+            original_filename=filename,
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow()
+        )
 
-    db.session.add(new_file_record)
-    db.session.commit()
+        # Agregar y hacer commit del nuevo registro en la base de datos
+        db.session.add(new_file_record)
+        db.session.commit()
+    except Exception as e:
+        return [{"message": f"Error al guardar archivo: {str(e)}"}]
 
     return [{"message": "Archivo subido correctamente", "filename": new_filename}]
 
 
-def read_pdf(file):
+def read_pdf(file, pInicio=None, pFin=None):
     reader = PdfReader(file)
     number_of_pages = len(reader.pages)
-    text = ""
-    paragraphs = []
-    for k in range(number_of_pages):
-        page = reader.pages[k]
-        # text += page.extract_text()
 
-        paragraphs.append(page.extract_text(encoding='UTF-8').strip('\n'))
+    # Si pInicio o pFin no se especifican, establecer valores predeterminados
+    if pInicio is None:
+        pInicio = 0
+    else:
+        pInicio = max(0, int(pInicio) - 1)  # Restar 1 para hacerlo base 0 y asegurarse de que no sea negativo
+
+    if pFin is None:
+        pFin = number_of_pages
+    else:
+        pFin = min(number_of_pages, int(pFin))  # Asegurarse de que no exceda el número de páginas
+
+    # Limitar la cantidad de páginas a leer a 15 como máximo
+    max_pages_to_read = 15
+    if pFin - pInicio > max_pages_to_read:
+        pFin = pInicio + max_pages_to_read
+
+    paragraphs = []
+    for k in range(pInicio, pFin):
+        page = reader.pages[k]
+        paragraphs.append(page.extract_text().strip('\n'))
+
     return paragraphs
 
 
@@ -155,7 +189,7 @@ def register_user(data):
     password = data['password']
     hash_password = genph(password)
     user = Usuario(
-        username=username,
+        name_user=username,
         email=email,
         password=hash_password,
         created_at=datetime.utcnow(),
@@ -170,19 +204,24 @@ def generate_answer(context: str, max_length: int = 512) -> str:
     inputText = "context: %s </s>" % (context)
     features = tokenizerQ([inputText], return_tensors='pt')
 
-    output = modelQ.generate(input_ids=features['input_ids'],
-                             attention_mask=features['attention_mask'],
+    # Mover los tensores de entrada a la GPU
+    input_ids = features['input_ids']#.to('cuda')
+    attention_mask = features['attention_mask']#.half().to('cuda')
+
+    output = modelQ.generate(input_ids=input_ids,
+                             attention_mask=attention_mask,
                              max_length=max_length)
 
     question = tokenizerQ.decode(output[0]).strip("[SEP]")
     question = question.strip("CLS]")
-    qa = pipeline("question-answering", model=modelA, tokenizer=tokenizerA)
-    pred = qa(question=question, context=context)
+    #qa = pipeline("question-answering", model=modelA, tokenizer=tokenizerA)
+    #pred = qa(question=question, context=context)
+    pred = qa_pipeline(question=question, context=context)
     return {'status': 200,
             'message': 'ok',
             'question': question,
             'answer': pred['answer'],
-            'score' : pred['score']
+            'score': pred['score']
             }
 
 
@@ -195,8 +234,8 @@ def create_new_project(data):
         description=description,
         user_id=user_id,
         status="active",
-        created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow()
+        created_at=datetime.now(),
+        updated_at=datetime.now()
     )
 
     try:
@@ -303,16 +342,14 @@ def get_meta_data_file_project(data):
 def delete_project(data):
     id_project = data['id_project']
     id_user = data['id_user']
-    project = Projects.query.filter_by(id=id_project).filter_by(id_user=id_user).first()
-    # En caso de querer que el proyecto se lleve a la papelera o exista una papelera
-    # project.status = "deleted"
-    # project.deleted_at = datetime.now()
-    # db.session.commit()
-
-    # eliminar el directorio
-    dir = project.dir
-    shutil.rmtree(dir)
-
+    project = Proyecto.query.filter_by(project_id=id_project).filter_by(user_id=id_user).first()
+    files = Archivo.query.filter_by(project_id=id_project).all()
+    for file in files:
+        #eliminar el archivo en el directorio
+        directorio = current_app.config['UPLOADS']+"/"+file.filename
+        os.remove(directorio)
+        db.session.delete(file)
+        db.session.commit()
     # elimminar el proyecto
     db.session.delete(project)
     db.session.commit()
@@ -320,7 +357,7 @@ def delete_project(data):
     return {"status": "200", "message": "Proyecto eliminado correctamente"}
 
 
-def get_file_text_project(data, fun=False):
+def get_file_text_project(data, fun=False, p_inicio=None, p_final=None):
     id_project = data['id_project']
     id_user = data['id_user']
     id_file = data['id_file']  # Ahora esto es un array
@@ -338,12 +375,12 @@ def get_file_text_project(data, fun=False):
                 extension = file.filename.split(".")[-1]
                 text = ""
                 if extension == 'pdf':
-                    text = read_pdf("uploads/"+file.filename)
+                    text = read_pdf("uploads/" + file.filename, p_inicio, p_final)
                 elif extension == 'docx':
-                    text = read_docs("uploads/"+file.filename)
+                    text = read_docs("uploads/" + file.filename)
                 combined_text.append(text)
             result.append({"status": "200", "message": "Archivo obtenido correctamente", "text": combined_text, 'file': file,
-                            'name': file.filename})
+                           'name': file.filename})
 
             if fun:
                 return combined_text  # Aquí quizá querrás cambiar el comportamiento también
@@ -352,43 +389,68 @@ def get_file_text_project(data, fun=False):
     return {"status": "200", "message": "Archivo no encontrado"}
 
 
-
-
-def quiz_batchSec(par:list,cross:False,sections:64):
-    questions=[]
-    answers=[]
-    predScore=[]
-    start_id=0
-    end_id=sections
-    words=par.split()
-    scale=math.trunc(len(words)/sections)
-    if(cross):
-       for i in range(scale):
-        section_selected=' '.join(words[start_id:end_id])
-        result = generate_answer(str(section_selected))
-        questions.append(result['question'])
-        answers.append(result['answer'])
-        predScore.append(result['score'])
-        if(i<scale):
-          start_id=start_id+int(sections/2)
-          end_id=start_id+sections
-        if(i==scale):
-          start_id=start_id+sections
-          end_id=len(words)-(scale*i)
-    if(not cross):
-      for i in range(scale):
-        section_selected=' '.join(words[start_id:end_id])
-        result = generate_answer(str(section_selected))
-        questions.append(result['question'])
-        answers.append(result['answer'])
-        predScore.append(result['score'])
-        start_id=end_id
-        if(i<scale):
-          end_id=start_id+sections
-        if(i==scale):
-          end_id=len(words)-1
+def quiz_batchSec(par: list, cross: False, sections: 64):
+    questions = []
+    answers = []
+    predScore = []
+    start_id = 0
+    end_id = sections
+    words = par.split()
+    scale = math.trunc(len(words) / sections)
+    if (cross):
+        for i in range(scale):
+            section_selected = ' '.join(words[start_id:end_id])
+            result = generate_answer(str(section_selected))
+            questions.append(result['question'])
+            answers.append(result['answer'])
+            predScore.append(result['score'])
+            if (i < scale):
+                start_id = start_id + int(sections / 2)
+                end_id = start_id + sections
+            if (i == scale):
+                start_id = start_id + sections
+                end_id = len(words) - (scale * i)
+    if (not cross):
+        for i in range(scale):
+            section_selected = ' '.join(words[start_id:end_id])
+            result = generate_answer(str(section_selected))
+            questions.append(result['question'])
+            answers.append(result['answer'])
+            predScore.append(result['score'])
+            start_id = end_id
+            if (i < scale):
+                end_id = start_id + sections
+            if (i == scale):
+                end_id = len(words) - 1
     return questions, answers, predScore
 
+
+"""
+def quiz_batchSec(par: str, cross: False, section_size: int = 64, batch_size: int = 1):
+    questions = []
+    answers = []
+    predScore = []
+
+    # Dividir el texto en secciones
+    words = par.split()
+    num_sections = math.ceil(len(words) / section_size)
+    sections = [' '.join(words[i * section_size: (i + 1) * section_size]) for i in range(num_sections)]
+
+    # Procesar en lotes (en este caso, una sección a la vez)
+    for i in range(0, len(sections), batch_size):
+        batch_sections = sections[i: i + batch_size]
+
+        # Concatenar secciones en el lote (solo una sección en este caso)
+        batch_text = ' '.join(batch_sections)
+
+        # Generar preguntas y respuestas para el lote
+        result = generate_answer(batch_text)
+        questions.append(result['question'])
+        answers.append(result['answer'])
+        predScore.append(result['score'])
+
+    return questions, answers, predScore
+"""
 
 def document_to_quiz(q: list, a: list) -> object:
     document = Document()
@@ -433,25 +495,7 @@ def download_file_project(id_project, id_file, id_user):
             return {"status": "400", "message": "Archivo no encontrado"}
         else:
             return send_from_directory("uploads", file.filename, as_attachment=True)
-
-    """dir = project.dir
-    f = []
-    if not os.path.exists(dir):
-        os.makedirs(dir)
-    files = os.listdir(dir)
-    for file in files:
-        sep = file.split("-")
-        id_proyecto = sep[0]
-        id_file_ = sep[1]
-        # quitar los primeros dos eleeentos del array
-        sep.pop(0)
-        sep.pop(0)
-        # unir el array en un string
-        name = "-".join(sep)
-        if id_file == id_file_:
-            # retornar el archivo para descargar"""
-
-    return {"status": "200", "message": "Archivo no encontrado"}
+    # return {"status": "200", "message": "Archivo no encontrado"}
 
 
 def download_file_project_tmp(name, id_user):
@@ -505,6 +549,7 @@ def read_file_project(data):
     return {"status": "200", "message": "Archivo no encontrado"}
 
 
+"""
 def createPDF():
     pdf = FPDF()
 
@@ -546,39 +591,159 @@ def createPDF():
         pdf.cell(0, 10, txt=f"Respuesta: {respuesta}", ln=1)
     # Guardamos el PDF
     # gneerar un hash para el nombre del archivo
+"""
+def new_create_PDF(questions, answers):
+    # Abre el documento y obtén la página que deseas modificar.
+    doc = fitz.open("assets/file_base.pdf")
+    page = doc[0]
 
-def topQuestions(question:list, answer:list, score:list, top:int):
-    df = pd.DataFrame(columns=['question', 'answer', 'score'])
-    for i in range(len(question)):
-        newData={'question':question[i], 'answer':answer[i], 'score':score[i]}
-        df = df.append(newData, ignore_index=True)
-    df = df.sort_values(by=['score'], ascending=False)
+    # Inserta el título en la parte superior de la página.
+    title = "Examen generado"
+    title_location = fitz.Point(50, 72)  # ajusta las coordenadas como sea necesario
+    title_color = (0, 0.4, 0.9)
+    page.insert_text(title_location, title, fontname="helv", fontsize=20, color=title_color, overlay=True)
+
+    # Define los puntos de inicio y fin de la línea y dibuja la línea en la página.
+    start = fitz.Point(50, 80)  # ajusta las coordenadas como sea necesario
+    end = fitz.Point(550, 80)  # ajusta las coordenadas como sea necesario
+    line = page.add_line_annot(start, end)
+    line.set_border(width=1.2)
+    line.set_colors(stroke=(0, 0.6, 0.9))  # color azul claro
+    line.update()
+
+    # Supón que tienes las preguntas y respuestas en dos listas, `preguntas` y `respuestas`.
+    preguntas = questions#['¿Pregunta 1?', '¿Pregunta 2?', '¿Pregunta 3?']
+    respuestas = answers#['Respuesta 1', 'Respuesta 2', 'Respuesta 3']
+
+    y_position = 120  # posición inicial de la y para la primera pregunta
+
+    for i in range(len(preguntas)):
+        question = f"{i + 1}. {preguntas[i]}"
+        answer = f"Respuesta: {respuestas[i]}"
+
+        # Inserta la pregunta
+        question_location = fitz.Point(50, y_position)
+        page.insert_text(question_location, question, fontname="helv", fontsize=11)
+
+        # Inserta la respuesta
+        y_position += 20  # ajusta según el espacio que quieras entre preguntas y respuestas
+        answer_location = fitz.Point(50, y_position)
+        page.insert_text(answer_location, answer, fontname="helv", fontsize=11)
+
+        y_position += 40  # ajusta según el espacio que quieras entre las preguntas
+
+    # Guarda el documento.
+    doc.save("temp/text.pdf")
+    """dir = "temp"
+    t = time.localtime()
+    nhash = hash(str(t.tm_year) + str(t.tm_mon) + str(t.tm_mday) + str(t.tm_hour) + str(t.tm_min) + str(t.tm_sec))
+    in_doc = f'{dir}/demo-{nhash}.docx'
+    out_doc = f'{dir}/demo-{nhash}-fritz.pdf'
+    name = f'demo-{nhash}-fritz.pdf'
+
+    #document.save(in_doc)
+    #doc = aw.Document(in_doc)
+    doc.save(out_doc)
+    return dir, name"""
+    return "temp", "demo.pdf"
+
+
+
+def topQuestions(question: list, answer: list, score: list, top: int):
+    data = {'question': question, 'answer': answer, 'score': score}
+    df = pd.DataFrame(data)
+    df = df.sort_values(by='score', ascending=False)
     df = df.head(top)
-    questions=df['question'].tolist()
-    aswers=df['answer'].tolist()
-    return questions, aswers
-def createQuiz(data, id, id_file, id_proyecto):
-    texto = get_file_text_project(data, fun=True)
+    questions = df['question'].tolist()
+    answers = df['answer'].tolist()
+    score = df['score'].tolist()
+    return questions, answers
+
+
+def createQuiz(data, id, id_file, id_proyecto, cantidad_preguntas=10, reemplazar=False, p_inicio=None, p_final=None):
+    print(data, id, id_file, id_proyecto, cantidad_preguntas)
+    texto = get_file_text_project(data, fun=True, p_inicio=p_inicio, p_final=p_final)
     texto_unido = ' '.join([' '.join(pagina) for pagina in texto])
-    q, a, score = quiz_batchSec(texto_unido, False, 128)
-    topQ,topA=topQuestions(q, a, score, 10)
-    name, dir = document_to_quiz(topQ, topA)
-    saveFileInDb(id_proyecto, [topQ, topA])
+    q, a, score = quiz_batchSec(texto_unido, False, 128) #128
+    topQ, topA = topQuestions(q, a, score, cantidad_preguntas)
+    try:
+        parafraser_question(topQ)
+    except:
+        pass
+    # name, dir = document_to_quiz(topQ, topA)
+    saveFileInDb(id_proyecto, id_file, [topQ, topA], reemplazar, data)
     # createPDF()
     # return {"status": "400", "message": "Error al crear el quiz"}
     return {"status": "200", "message": "Quiz creado correctamente", "quiz questions": topQ,
             "quiz answers": topA}
+def parafraser_question(questions):
+    print("Preguntas: ", questions)
+    n = int(len(questions) * 0.2)
+
+    # Seleccionar índices del 20% de los elementos de forma aleatoria sin repetición
+    indices_seleccionados = random.sample(range(len(questions)), n)
+
+    # Parafrasear y reemplazar en el array original
+    for index in indices_seleccionados:
+        pregunta_original = questions[index]
+        lista_parafraseado = generate(pregunta_original)
+        diccionario_parafraseado = random.choice(lista_parafraseado)  # Elegir un diccionario al azar
+        pregunta_parafraseada = diccionario_parafraseado["respuesta"]
+        questions[index] = pregunta_parafraseada
+        print("Pregunta inicial: ", pregunta_original, " Pregunta parafraseada:", pregunta_parafraseada)
+
+    # Mostrar el array modificado
+    print("Preguntas con parafraseado: ", questions)
+    return questions
+
+def saveFileInDb(id_proyecto, id_files, data, reemplazar, json_data):
+    id = json_data['id_user']
+
+    cantidad = json_data['cant_questions']
+    reescribir = json_data['reescribir']
+    id_cuestionario_antiguo = json_data['id_cuestionario_antiguo']
+    #names files
+    files = Archivo.query.filter(Archivo.file_id.in_(id_files)).all()
+    names = [file.original_filename for file in files]
 
 
-def saveFileInDb(id_proyecto, data):
-    newTest = Test(proyecto_id=id_proyecto, test_data=json.dumps({"questions": data[0], "answers": data[1]}))
-    db.session.add(newTest)
-    db.session.commit()
+    if reemplazar:
+        #rremplazar el test existente
+        test = Test.query.filter_by(test_id=id_cuestionario_antiguo).first()
+        if test:
+            test.test_data = json.dumps({"questions": data[0], "answers": data[1]})
+            test.updated_at = datetime.now()
+            test.names_files = names
+            db.session.commit()
+    # Crear un nuevo objeto Test (cuestionario)
+    else:
+        new_test = Test(
+            proyecto_id=id_proyecto,
+            test_data=json.dumps({"questions": data[0], "answers": data[1]}),
+            names_files=names,
+            is_multi_file=len(id_files) > 1  # establecer is_multi_file según el número de archivos
+        )
+
+        # Añadir los archivos relacionados
+        for file_id in id_files:
+            file = Archivo.query.get(file_id)
+            if file:  # Asegúrate de que el archivo exista antes de agregarlo a la relación
+                new_test.archivos.append(file)
+
+        # Agregar el nuevo cuestionario a la sesión de la base de datos
+        db.session.add(new_test)
+
+        # Confirmar los cambios en la base de datos
+        db.session.commit()
+
 
 def generate_pdf(data):
     questions = data.get('q', [])
     answers = data.get('a', [])
+    d1, n1 = new_create_PDF(questions, answers)
     directorio, name = document_to_quiz(questions, answers)
+
+    print(d1, n1)
     return send_from_directory(directorio, name, as_attachment=True)
 
 
@@ -596,19 +761,58 @@ def borrar_archivos(directorio):
 
 def get_all_quiz(data):
     id_proyecto = data['id_project']
-    id_user = data['id_user']
-    id_file = data['id_file']
+    # id_user = data['id_user']
+    # id_file = data['id_file']
 
     project = Test.query.filter_by(proyecto_id=id_proyecto).all()
     if project:
         data_n = []
         for p in project:
             try:
-                data_n.append({'cuestionario':json.loads(p.test_data), 'fecha':p.created_at.strftime("%d/%m/%Y %H:%M:%S")})
+                data_n.append({'cuestionario': json.loads(p.test_data), 'created_at': p.created_at.strftime("%d/%m/%Y %H:%M:%S"), 'name_files': p.names_files, 'id_cuestionario': p.test_id})
             except json.JSONDecodeError as e:
                 print(f"Error parsing JSON: {e}")
         return {"status": "200", "message": "Quiz encontrado", "quiz": data_n}
     return {"status": "200", "message": "Quiz no encontrado"}
 
 
+def delete_file(data):
+    id_file = data['id_file']
+    id_user = data['id_user']
+    id_proyecto = data['id_project']
 
+    file = Archivo.query.filter_by(file_id=id_file).first()
+    if file:
+        try:
+            os.remove(os.path.join(current_app.config['UPLOADS'], file.filename))
+            db.session.delete(file)
+            db.session.commit()
+            return {"status": "200", "message": "Archivo eliminado correctamente"}
+        except Exception as e:
+            print(f"Error al eliminar el archivo: {e}")
+            return {"status": "400", "message": "Error al eliminar el archivo"}
+    return {"status": "400", "message": "Archivo no encontrado"}
+
+
+def get_quiz_by_id(id):
+    quiz = Test.query.get(id)
+    if quiz:
+        try:
+            data = json.loads(quiz.test_data)
+            return {"status": "200", "message": "Quiz encontrado", "quiz": data}
+        except json.JSONDecodeError as e:
+            print(f"Error parsing JSON: {e}")
+    return {"status": "400", "message": "Quiz no encontrado"}
+
+
+class QuestionAnswerTemplate(Flowable):
+    def __init__(self, questions, answers):
+        Flowable.__init__(self)
+        self.questions = questions
+        self.answers = answers
+
+    def draw(self):
+        c = self.canv
+        for i, (question, answer) in enumerate(zip(self.questions, self.answers)):
+            c.drawString(100, 800 - i * 100, question)
+            c.drawString(300, 800 - i * 100, answer)

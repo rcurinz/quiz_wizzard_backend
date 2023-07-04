@@ -6,11 +6,13 @@ from werkzeug.utils import secure_filename
 from app import app
 from reports.api_project_reports import *
 
-cors = CORS(app, resources={r"/api/*": {"origins": "*"}})
+cors = CORS(app)
 mod_api_project = Blueprint('api_project', __name__, template_folder='templates', url_prefix='/api')
 
 
-
+@mod_api_project.route('/')
+def hello_world():  # put application's code here
+    return {'data': "Hello World!"}
 #test
 @mod_api_project.route('/test')
 def test():
@@ -144,6 +146,25 @@ def download_file(id_project, id_file, id_user):
     #print("aqui--------",data, type(data))
     return data
 
+@mod_api_project.route('/has-test-associated/<id_project>/<id_file>', methods=['GET'])
+def has_test_associated(id_project, id_file):
+    print(id_project, id_file)
+    file = Archivo.query.filter_by(file_id=id_file).first()
+    if not file:
+        return {"status": "400", "message": "Archivo no encontrado"}, 400
+
+    associated_test_id = None
+
+    for test in file.tests:
+        if test.proyecto_id == int(id_project) and not test.is_multi_file:
+            associated_test_id = test.test_id
+            break
+
+    if associated_test_id:
+        return {"test_id": associated_test_id}
+    else:
+        return {"status": "404", "test_id": None}, 404
+
 @mod_api_project.route('/downloadfiletemp', methods=['POST'])
 def download_file_temp():
     data = request.data.decode('utf-8')
@@ -162,7 +183,11 @@ def createquiz():
     id_proyecto = data['id_project']
     id_file = data['id_file']
     id = data['id_user']
-    data = createQuiz(data, id, id_file, id_proyecto)
+    cantidad = data['cant_questions']
+    reescribir = data['reescribir']
+    p_inicio = data['p_inicio']
+    p_final = data['p_final']
+    data = createQuiz(data, id, id_file, id_proyecto, cantidad, reescribir, p_inicio, p_final)
     return jsonify(data)
 
 
@@ -182,3 +207,19 @@ def getallquiz():
     data = request.get_json()
     data = get_all_quiz(data)
     return jsonify(data)
+
+#delete file
+@mod_api_project.route('/deletefilebyid', methods=['POST'])
+def deletefile():
+    data = request.get_json()
+    data = delete_file(data)
+    return jsonify(data)
+
+
+#cuestionario by id
+@mod_api_project.route('/get-cuestionario-by-id/<id>', methods=['GET'])
+def getquizbyid(id):
+    data = get_quiz_by_id(id)
+    response = jsonify(data)
+    response.headers['Content-Type'] = 'application/json; charset=utf-8'
+    return response
