@@ -1,6 +1,7 @@
 # pip install protobuf      ->    posiblemente instalar version 3.20.x o menor
 # pip install pandas
 import json
+import re
 import os
 import math
 import random
@@ -664,6 +665,8 @@ def createQuiz(data, id, id_file, id_proyecto, cantidad_preguntas=10, reemplazar
     print(data, id, id_file, id_proyecto, cantidad_preguntas)
     texto = get_file_text_project(data, fun=True, p_inicio=p_inicio, p_final=p_final)
     texto_unido = ' '.join([' '.join(pagina) for pagina in texto])
+    texto_unido = texto_unido.replace('\n', ' ')
+    texto_unido =  re.sub(r'(.)\1+', r'\1', texto_unido)
     q, a, score = quiz_batchSec(texto_unido, False, 128) #128
     topQ, topA = topQuestions(q, a, score, cantidad_preguntas)
     try:
