@@ -648,8 +648,6 @@ def new_create_PDF(questions, answers):
     return dir, name"""
     return "temp", "demo.pdf"
 
-
-
 def topQuestions(question: list, answer: list, score: list, top: int):
     data = {'question': question, 'answer': answer, 'score': score}
     df = pd.DataFrame(data)
@@ -660,19 +658,23 @@ def topQuestions(question: list, answer: list, score: list, top: int):
     score = df['score'].tolist()
     return questions, answers
 
-
 def createQuiz(data, id, id_file, id_proyecto, cantidad_preguntas=10, reemplazar=False, p_inicio=None, p_final=None):
     print(data, id, id_file, id_proyecto, cantidad_preguntas)
     texto = get_file_text_project(data, fun=True, p_inicio=p_inicio, p_final=p_final)
     texto_unido = ' '.join([' '.join(pagina) for pagina in texto])
     texto_unido = texto_unido.replace('\n', ' ')
     texto_unido =  re.sub(r'(.)\1+', r'\1', texto_unido)
-    q, a, score = quiz_batchSec(texto_unido, False, 128) #128
-    topQ, topA = topQuestions(q, a, score, cantidad_preguntas)
+    #q, a, score = quiz_batchSec(texto_unido, False, 128) #128
+    #topQ, topA = topQuestions(q, a, score, cantidad_preguntas)
     try:
-        parafraser_question(topQ)
-    except:
-        pass
+        print("Esntro al try")
+        q, a, score = quiz_batchSec(texto_unido, False, 128)  # 128
+        print(a, q, score)
+        topQ, topA = topQuestions(q, a, score, cantidad_preguntas)
+        #parafraser_question(topQ)
+    except Exception as e:
+        print("Error al crear el quiz: ", str(e))
+        return {"status": "400", "message": f"Error al crear el quiz: {str(e)}", "respuesta": f"Error al crear el quiz: {str(e)} "}
     # name, dir = document_to_quiz(topQ, topA)
     saveFileInDb(id_proyecto, id_file, [topQ, topA], reemplazar, data)
     # createPDF()
